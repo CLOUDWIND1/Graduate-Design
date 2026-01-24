@@ -31,6 +31,11 @@ class UserProfile(Base):
     # 问卷状态
     questionnaire_completed = Column(Integer, default=0)  # 是否完成问卷 (0/1)
     
+    # 偏好设置
+    preference_frequency = Column(String(20), default="daily") # daily, weekly, realtime
+    preference_activity_types = Column(String(255), default="invite,quiz,share")
+    preference_incentive_types = Column(String(255), default="red_packet,points,coupon")
+    
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -52,6 +57,9 @@ class UserProfile(Base):
             "cluster_id": self.cluster_id,
             "cluster_tag": self.cluster_tag,
             "questionnaire_completed": self.questionnaire_completed,
+            "preference_frequency": self.preference_frequency,
+            "preference_activity_types": self.preference_activity_types.split(",") if self.preference_activity_types else [],
+            "preference_incentive_types": self.preference_incentive_types.split(",") if self.preference_incentive_types else [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

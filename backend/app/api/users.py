@@ -8,20 +8,12 @@ from app.api.deps import get_current_user
 from app.models import User, UserProfile
 from app.services.profile_service import profile_service
 from app.utils.logger import logger
+from app.schemas.profile import UserPreferences, UserProfileUpdate
 
 router = APIRouter()
 
 
-class UserProfileUpdate(BaseModel):
-    factor_social: Optional[float] = None
-    factor_psych: Optional[float] = None
-    factor_incent: Optional[float] = None
-    factor_tech: Optional[float] = None
-    factor_env: Optional[float] = None
-    factor_personal: Optional[float] = None
-    cluster_id: Optional[int] = None
-    cluster_tag: Optional[str] = None
-    questionnaire_completed: Optional[int] = None
+# Removed UserProfileUpdate class definition here as it is imported from schemas
 
 
 class QuestionnaireSubmit(BaseModel):
@@ -110,7 +102,12 @@ async def get_current_user_info(
         "status": current_user.status,
         "cluster_tag": profile.cluster_tag if profile else "新用户",
         "questionnaire_completed": profile.questionnaire_completed if profile else 0,
-        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "preferences": {
+            "frequency": profile.preference_frequency if profile and profile.preference_frequency else "daily",
+            "activityTypes": profile.preference_activity_types.split(",") if profile and profile.preference_activity_types else [],
+            "incentiveTypes": profile.preference_incentive_types.split(",") if profile and profile.preference_incentive_types else []
+        }
     }
 
 
@@ -133,6 +130,33 @@ async def update_user_profile(
     db.commit()
     db.refresh(profile)
     return profile.to_dict()
+
+    db.commit()
+    db.refresh(profile)
+    return profile.to_dict()
+
+
+@router.put("/me/preferences")
+async def update_user_preferences(
+    preferences: UserPreferences,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新用户偏好设置"""
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    if not profile:
+        profile = UserProfile(user_id=current_user.id)
+        db.add(profile)
+    
+    # Update fields
+    profile.preference_frequency = preferences.frequency
+    profile.preference_activity_types = ",".join(preferences.activityTypes)
+    profile.preference_incentive_types = ",".join(preferences.incentiveTypes)
+    
+    db.commit()
+    
+    logger.info(f"用户 {current_user.id} 更新偏好设置")
+    return {"message": "偏好设置已更新"}
 
 @router.get("/")
 async def list_users(db: Session = Depends(get_db)):
