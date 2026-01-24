@@ -1,0 +1,331 @@
+{
+  "version": "1.0.0",
+  "description": "全民获客智能推荐系统配置",
+  
+  "training": {
+    "data_split": {
+      "train_ratio": 0.70,
+      "val_ratio": 0.15,
+      "test_ratio": 0.15,
+      "random_state": 42,
+      "stratify": true
+    },
+    "smote": {
+      "enabled": true,
+      "sampling_strategy": 0.8,
+      "k_neighbors": 5,
+      "random_state": 42
+    },
+    "random_forest": {
+      "n_estimators": 200,
+      "max_depth": 12,
+      "min_samples_split": 10,
+      "min_samples_leaf": 5,
+      "max_features": "sqrt",
+      "class_weight": {"0": 1, "1": 2},
+      "random_state": 42,
+      "n_jobs": -1
+    },
+    "threshold": {
+      "default": 0.35,
+      "high_recall": 0.25,
+      "high_precision": 0.50
+    },
+    "cross_validation": {
+      "method": "StratifiedKFold",
+      "n_splits": 5,
+      "shuffle": true
+    },
+    "target_metrics": {
+      "min_auc": 0.85,
+      "min_recall": 0.80,
+      "min_precision": 0.60
+    }
+  },
+  
+  "clustering": {
+    "algorithm": "kmeans++",
+    "n_clusters": 10,
+    "max_iter": 300,
+    "n_init": 10,
+    "random_state": 42,
+    "cluster_labels": {
+      "0": "社交活跃型",
+      "1": "品牌忠诚型",
+      "2": "观望保守型",
+      "3": "高价值型",
+      "4": "互动参与型",
+      "5": "低频使用型",
+      "6": "稳定忠实型",
+      "7": "积极响应型",
+      "8": "潜在流失型",
+      "9": "深度粘性型"
+    }
+  },
+  
+  "inference": {
+    "cache": {
+      "user_profile_ttl": 300,
+      "model_prediction_ttl": 60,
+      "shap_explanation_ttl": 3600,
+      "activity_list_ttl": 600
+    },
+    "timeout": {
+      "model_predict_ms": 500,
+      "shap_explain_ms": 1000,
+      "total_request_ms": 2000
+    },
+    "batch": {
+      "max_activities_per_request": 50,
+      "parallel_predictions": true
+    },
+    "rate_limit": {
+      "requests_per_second_per_user": 100,
+      "requests_per_minute_per_user": 1000
+    }
+  },
+  
+  "cluster_strategies": {
+    "0": {
+      "name": "社交活跃型",
+      "description": "喜欢社交互动，对团队活动感兴趣",
+      "push_config": {
+        "max_daily_push": 5,
+        "min_interval_minutes": 60,
+        "preferred_time_slots": ["10:00-12:00", "14:00-16:00", "19:00-21:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["social_bonus", "team_reward", "referral_bonus"],
+        "min_points_threshold": 50,
+        "show_leaderboard": true
+      },
+      "score_boost": 1.1
+    },
+    "1": {
+      "name": "品牌忠诚型",
+      "description": "对品牌有较高忠诚度，偏好熟悉的活动",
+      "push_config": {
+        "max_daily_push": 3,
+        "min_interval_minutes": 120,
+        "preferred_time_slots": ["09:00-11:00", "14:00-16:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["loyalty_bonus", "exclusive_reward", "vip_benefit"],
+        "min_points_threshold": 80,
+        "show_leaderboard": false
+      },
+      "score_boost": 1.05
+    },
+    "2": {
+      "name": "观望保守型",
+      "description": "偏好稳定收益，对风险敏感",
+      "push_config": {
+        "max_daily_push": 2,
+        "min_interval_minutes": 180,
+        "preferred_time_slots": ["10:00-11:00", "15:00-16:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["stable_reward", "guaranteed_bonus", "low_risk"],
+        "min_points_threshold": 100,
+        "show_leaderboard": false
+      },
+      "score_boost": 1.0
+    },
+    "3": {
+      "name": "高价值型",
+      "description": "高消费能力，对高价值活动感兴趣",
+      "push_config": {
+        "max_daily_push": 4,
+        "min_interval_minutes": 90,
+        "preferred_time_slots": ["09:00-12:00", "14:00-18:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["premium_reward", "high_value_bonus", "exclusive_offer"],
+        "min_points_threshold": 200,
+        "show_leaderboard": true
+      },
+      "score_boost": 1.2
+    },
+    "4": {
+      "name": "互动参与型",
+      "description": "积极参与各类活动，互动性强",
+      "push_config": {
+        "max_daily_push": 6,
+        "min_interval_minutes": 45,
+        "preferred_time_slots": ["08:00-12:00", "13:00-18:00", "19:00-22:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["participation_bonus", "engagement_reward", "activity_points"],
+        "min_points_threshold": 30,
+        "show_leaderboard": true
+      },
+      "score_boost": 1.15
+    },
+    "5": {
+      "name": "低频使用型",
+      "description": "使用频率较低，需要特别激励",
+      "push_config": {
+        "max_daily_push": 2,
+        "min_interval_minutes": 240,
+        "preferred_time_slots": ["12:00-13:00", "18:00-19:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["comeback_bonus", "easy_task", "quick_reward"],
+        "min_points_threshold": 20,
+        "show_leaderboard": false
+      },
+      "score_boost": 0.9
+    },
+    "6": {
+      "name": "稳定忠实型",
+      "description": "长期稳定用户，偏好持续性活动",
+      "push_config": {
+        "max_daily_push": 3,
+        "min_interval_minutes": 120,
+        "preferred_time_slots": ["09:00-11:00", "14:00-16:00", "20:00-21:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["loyalty_points", "streak_bonus", "milestone_reward"],
+        "min_points_threshold": 60,
+        "show_leaderboard": false
+      },
+      "score_boost": 1.05
+    },
+    "7": {
+      "name": "积极响应型",
+      "description": "对推送响应积极，转化率高",
+      "push_config": {
+        "max_daily_push": 5,
+        "min_interval_minutes": 60,
+        "preferred_time_slots": ["08:00-12:00", "14:00-18:00", "19:00-21:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["instant_reward", "flash_bonus", "time_limited"],
+        "min_points_threshold": 40,
+        "show_leaderboard": true
+      },
+      "score_boost": 1.15
+    },
+    "8": {
+      "name": "潜在流失型",
+      "description": "有流失风险，需要挽留策略",
+      "push_config": {
+        "max_daily_push": 2,
+        "min_interval_minutes": 180,
+        "preferred_time_slots": ["11:00-12:00", "17:00-18:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["retention_bonus", "special_offer", "comeback_reward"],
+        "min_points_threshold": 100,
+        "show_leaderboard": false
+      },
+      "score_boost": 1.1
+    },
+    "9": {
+      "name": "深度粘性型",
+      "description": "深度用户，对平台有高度粘性",
+      "push_config": {
+        "max_daily_push": 4,
+        "min_interval_minutes": 90,
+        "preferred_time_slots": ["09:00-12:00", "14:00-17:00", "19:00-22:00"]
+      },
+      "incentive_preference": {
+        "preferred_types": ["advanced_reward", "expert_bonus", "community_benefit"],
+        "min_points_threshold": 80,
+        "show_leaderboard": true
+      },
+      "score_boost": 1.1
+    }
+  },
+  
+  "explainability": {
+    "shap": {
+      "background_samples": 100,
+      "max_display_features": 3,
+      "positive_threshold": 0.05,
+      "negative_threshold": -0.05,
+      "use_approximate": true
+    },
+    "text_generation": {
+      "max_length": 50,
+      "language": "zh-CN",
+      "tone": "friendly"
+    },
+    "feature_names": {
+      "factor_social": "社交偏好",
+      "factor_psych": "心理特征",
+      "factor_incent": "激励敏感度",
+      "factor_tech": "技术接受度",
+      "factor_env": "环境适应性",
+      "factor_personal": "个人特质",
+      "activity_points": "活动积分",
+      "activity_type": "活动类型",
+      "incentive_amount": "激励金额"
+    },
+    "explanation_rules": {
+      "high_social": "您的社交活跃度较高，适合参与互动类活动",
+      "high_incent": "您对激励较为敏感，这个活动奖励丰厚",
+      "high_tech": "您的技术接受度高，适合尝试新型活动",
+      "low_risk": "这是一个低风险活动，符合您的稳健偏好"
+    }
+  },
+  
+  "ab_testing": {
+    "enabled": true,
+    "default_group": "control",
+    "groups": {
+      "control": {
+        "description": "对照组-默认策略",
+        "weight": 0.5
+      },
+      "treatment_a": {
+        "description": "实验组A-提高推送频次",
+        "weight": 0.25,
+        "overrides": {
+          "cluster_strategies.0.push_config.max_daily_push": 7,
+          "cluster_strategies.1.push_config.max_daily_push": 3
+        }
+      },
+      "treatment_b": {
+        "description": "实验组B-降低阈值",
+        "weight": 0.25,
+        "overrides": {
+          "training.threshold.default": 0.30
+        }
+      }
+    }
+  },
+  
+  "privacy": {
+    "sensitive_user_handling": {
+      "enabled": true,
+      "max_daily_push": 1,
+      "require_explicit_consent": true,
+      "data_retention_days": 30
+    },
+    "data_anonymization": {
+      "enabled": true,
+      "hash_user_id_in_logs": true
+    }
+  },
+  
+  "monitoring": {
+    "metrics": {
+      "track_auc": true,
+      "track_recall": true,
+      "track_precision": true,
+      "track_ctr": true,
+      "track_conversion_rate": true
+    },
+    "alerts": {
+      "auc_drop_threshold": 0.05,
+      "latency_p99_threshold_ms": 1500,
+      "error_rate_threshold": 0.01
+    },
+    "logging": {
+      "log_predictions": true,
+      "log_explanations": false,
+      "sample_rate": 0.1
+    }
+  }
+}
