@@ -12,12 +12,12 @@ class Settings(BaseSettings):
     # 应用配置
     APP_NAME: str = "全民获客智能推荐系统"
     DEBUG: bool = True
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str  # 必须从环境变量或.env文件加载
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24小时
     
     # 数据库配置
-    DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/recommendation_system"
+    DATABASE_URL: str  # 必须从环境变量或.env文件加载
     
     # Redis配置
     REDIS_URL: str = "redis://localhost:6379/0"
