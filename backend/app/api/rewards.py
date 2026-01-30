@@ -48,8 +48,15 @@ def get_rewards(
     # 手动填充 activity_name 字段
     # 注意：更优雅的方式是在 Schema 中配置 ORM 关联，或者在 Service 层处理
     # 这里为了保持 API 层逻辑简单，我们在转换前处理
+    # 手动填充 activity_name 字段
+    # 利用 SQLAlchemy 的 backref="activity" 获取关联的活动信息
     for reward in rewards:
-        if not reward.activity_name: # 如果模型本身没有这个属性（非ORM映射字段）
+        # 直接赋值，避免读取不存在的 activity_name 属性导致 AttributeError
+        # 这里的 reward.activity 是通过 Activity 模型中的 relationship backref 自动生成的
+        if getattr(reward, "activity", None):
+             reward.activity_name = reward.activity.title
+        else:
+             # 如果 backref 还没生效，尝试手动查询 (为了兼容性)
              activity = db.query(Activity).filter(Activity.id == reward.activity_id).first()
              reward.activity_name = activity.title if activity else "未知活动"
     
