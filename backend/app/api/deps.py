@@ -7,17 +7,19 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
+from typing import Optional
 
 from app.database import get_db
 from app.config import settings
 from app.models import User, UserRole
+from app.utils.logger import logger
 
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
-async def get_current_user(
+def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> User:
@@ -40,7 +42,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    print(f"[AUTH] Validating token: {token[:20]}..." if token else "[AUTH] No token provided")
+    # logger.debug(f"[AUTH] Validating token fragment: {token[:10]}..." if token else "[AUTH] No token provided")
     
     try:
         payload = jwt.decode(
@@ -49,16 +51,16 @@ async def get_current_user(
             algorithms=[settings.ALGORITHM]
         )
         username: str = payload.get("sub")
-        print(f"[AUTH] Token decoded, username: {username}")
+        # logger.debug(f"[AUTH] Token decoded, username: {username}")
         if username is None:
             raise credentials_exception
     except JWTError as e:
-        print(f"[AUTH] JWT Error: {e}")
+        logger.warning(f"[AUTH] JWT Error: {e}")
         raise credentials_exception
     
     user = db.query(User).filter(User.username == username).first()
     if user is None:
-        print(f"[AUTH] User not found: {username}")
+        logger.warning(f"[AUTH] User not found: {username}")
         raise credentials_exception
     
     if user.status != 1:  # UserStatus.ACTIVE
@@ -67,11 +69,11 @@ async def get_current_user(
             detail="用户已被禁用"
         )
     
-    print(f"[AUTH] User authenticated: {user.username}")
+    # logger.info(f"[AUTH] User authenticated: {user.username}")
     return user
 
 
-async def get_current_admin(
+def get_current_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """
@@ -94,7 +96,7 @@ async def get_current_admin(
     return current_user
 
 
-async def get_optional_user(
+def get_optional_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> User | None:
@@ -125,3 +127,4 @@ async def get_optional_user(
         return user
     except JWTError:
         return None
+

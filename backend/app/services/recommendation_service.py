@@ -50,6 +50,35 @@ class RecommendationService:
         except Exception as e:
             logger.warning(f"SHAP解释器初始化失败: {e}")
     
+    def calculate_factor_scores(self, answers: List[int]) -> Dict[str, float]:
+        """
+        计算问卷因子得分
+        
+        问卷共20题，按顺序对应6个因子：
+        - social: 3题 (索引 0-2)
+        - psych: 4题 (索引 3-6)
+        - incent: 3题 (索引 7-9)
+        - tech: 3题 (索引 10-12)
+        - env: 3题 (索引 13-15)
+        - personal: 4题 (索引 16-19)
+        """
+        if len(answers) < 20:
+            # 补齐不足的答案 (理论上schema已校验，这里做防御性编程)
+            answers.extend([3] * (20 - len(answers)))
+            
+        # 计算各因子分数（平均值，归一化到0-1）
+        def avg_factor(start: int, end: int) -> float:
+            return sum(answers[start:end]) / ((end - start) * 5)
+        
+        return {
+            'factor_social': avg_factor(0, 3),
+            'factor_psych': avg_factor(3, 7),
+            'factor_incent': avg_factor(7, 10),
+            'factor_tech': avg_factor(10, 13),
+            'factor_env': avg_factor(13, 16),
+            'factor_personal': avg_factor(16, 20)
+        }
+
     def get_recommendations(
         self, 
         db: Session, 

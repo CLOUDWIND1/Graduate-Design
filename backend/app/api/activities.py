@@ -9,13 +9,15 @@ from datetime import datetime
 from app.database import get_db
 from app.api.deps import get_current_user, get_current_admin
 from app.models import Activity, User, Reward
-from app.schemas.activity import ActivityCreate, ActivityUpdate, ActivityResponse
+from app.schemas.activity import ActivityCreate, ActivityUpdate, ActivityResponse, ActivityListResponse
+from app.utils.logger import logger
 
 router = APIRouter()
 
 
-@router.get("/")
-async def list_activities(
+
+@router.get("/", response_model=ActivityListResponse)
+def list_activities(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     name: Optional[str] = None,
@@ -42,16 +44,18 @@ async def list_activities(
         .limit(page_size)\
         .all()
     
-    return {
-        "items": [a.to_dict() for a in activities],
-        "total": total,
-        "page": page,
-        "page_size": page_size
-    }
+    logger.info(f"Listing activities: page={page}, size={page_size}, total={total}")
+    logger.info(f"Listing activities: page={page}, size={page_size}, total={total}")
+    return ActivityListResponse(
+        items=activities,
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 
-@router.post("/")
-async def create_activity(
+@router.post("/", response_model=ActivityResponse)
+def create_activity(
     activity: ActivityCreate,
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -72,20 +76,21 @@ async def create_activity(
     db.add(new_activity)
     db.commit()
     db.refresh(new_activity)
-    return new_activity.to_dict()
+    logger.info(f"Admin {current_user.username} created activity: {new_activity.id} - {new_activity.title}")
+    return new_activity
 
 
-@router.get("/{activity_id}")
-async def get_activity(activity_id: int, db: Session = Depends(get_db)):
+@router.get("/{activity_id}", response_model=ActivityResponse)
+def get_activity(activity_id: int, db: Session = Depends(get_db)):
     """获取活动详情"""
     activity = db.query(Activity).filter(Activity.id == activity_id).first()
     if not activity:
         raise HTTPException(status_code=404, detail="活动不存在")
-    return activity.to_dict()
+    return activity
 
 
-@router.put("/{activity_id}")
-async def update_activity(
+@router.put("/{activity_id}", response_model=ActivityResponse)
+def update_activity(
     activity_id: int,
     updates: ActivityUpdate,
     current_user: User = Depends(get_current_admin),
@@ -102,11 +107,12 @@ async def update_activity(
     
     db.commit()
     db.refresh(activity)
-    return activity.to_dict()
+    logger.info(f"Admin {current_user.username} updated activity: {activity.id}")
+    return activity
 
 
 @router.delete("/{activity_id}")
-async def delete_activity(
+def delete_activity(
     activity_id: int,
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -118,6 +124,7 @@ async def delete_activity(
     
     db.delete(activity)
     db.commit()
+    logger.info(f"Admin {current_user.username} deleted activity: {activity_id}")
     return {"message": "活动已删除"}
 
 
@@ -125,9 +132,9 @@ class StatusUpdate(BaseModel):
     status: str
 
 
-@router.patch("/{activity_id}/status/")
-@router.patch("/{activity_id}/status")
-async def update_activity_status(
+@router.patch("/{activity_id}/status/", response_model=ActivityResponse)
+@router.patch("/{activity_id}/status", response_model=ActivityResponse)
+def update_activity_status(
     activity_id: int,
     payload: StatusUpdate,
     current_user: User = Depends(get_current_admin),
@@ -149,12 +156,13 @@ async def update_activity_status(
     activity.status = payload.status
     db.commit()
     db.refresh(activity)
-    return activity.to_dict()
+    logger.info(f"Admin {current_user.username} updated status of activity {activity.id} to {payload.status}")
+    return activity
 
 
 @router.post("/{activity_id}/participate/")
 @router.post("/{activity_id}/participate")
-async def participate_activity(
+def participate_activity(
     activity_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -188,7 +196,9 @@ async def participate_activity(
     
     db.commit()
     
+    logger.info(f"User {current_user.id} participated in activity {activity_id}, reward: {reward.id}")
     return {
         "message": "参与成功",
         "reward": reward.to_dict()
     }
+

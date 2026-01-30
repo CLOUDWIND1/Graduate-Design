@@ -46,3 +46,17 @@ class StatisticsResponse(BaseModel):
     click_rate: float
     accept_rate: float
     top_features: List[dict]
+
+
+class RecommendationHistoryResponse(BaseModel):
+    """推荐历史响应模式"""
+    id: int
+    activity_id: int
+    activity_title: str
+    score: float
+    reason: Optional[str] = None
+    is_clicked: bool
+    is_accepted: bool
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}

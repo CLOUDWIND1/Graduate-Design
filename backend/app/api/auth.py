@@ -34,8 +34,9 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+
 @router.post("/login", response_model=Token)
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
+def login(request: LoginRequest, db: Session = Depends(get_db)):
     """用户登录"""
     user = db.query(User).filter(User.username == request.username).first()
     
@@ -57,7 +58,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/register")
-async def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(user: UserCreate, db: Session = Depends(get_db)):
     """用户注册"""
     # 检查用户名是否已存在
     existing_user = db.query(User).filter(User.username == user.username).first()
@@ -100,6 +101,7 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/logout")
-async def logout():
+def logout():
     """用户登出"""
     return {"message": "登出成功"}
+

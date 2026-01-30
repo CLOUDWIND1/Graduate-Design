@@ -7,12 +7,20 @@ from typing import Optional
 from app.database import get_db
 from app.api.deps import get_current_admin
 from app.models import User, Activity, Reward, Recommendation, UserProfile
+from app.utils.logger import logger
+
+from app.schemas.admin import (
+    DashboardResponse, AdminUserListResponse, PotentialAnalysisResponse,
+    StrategyItem, SystemLogResponse, UserStatsResponse, ActivityStatsResponse,
+    ConfigResponse, ModelInfoResponse, ClusterItem, TrendItem, FeatureItem,
+    ClusterStatsItem, ClusterRebuildResponse
+)
 
 router = APIRouter()
 
 
 @router.get("/dashboard")
-async def get_dashboard(
+def get_dashboard(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -55,38 +63,38 @@ async def get_dashboard(
     trend_data = []
     for i in range(7):
         date = datetime.now() - timedelta(days=6-i)
-        trend_data.append({
-            "date": date.strftime("%m-%d"),
-            "click_rate": round(25 + (i * 3) + (hash(str(date)) % 15), 1),
-            "accept_rate": round(15 + (i * 2) + (hash(str(date)) % 10), 1)
-        })
+        trend_data.append(TrendItem(
+            date=date.strftime("%m-%d"),
+            click_rate=round(25 + (i * 3) + (hash(str(date)) % 15), 1),
+            accept_rate=round(15 + (i * 2) + (hash(str(date)) % 10), 1)
+        ))
     
-    return {
+    return DashboardResponse(
         # 前端期望的字段名
-        "userCount": total_users,
-        "activeActivityCount": active_activities,
-        "totalRecommendations": total_recommendations,
-        "avgClickRate": click_rate,
+        userCount=total_users,
+        activeActivityCount=active_activities,
+        totalRecommendations=total_recommendations,
+        avgClickRate=click_rate,
         # 图表数据
-        "clusterDistribution": cluster_distribution,
-        "recommendationTrend": trend_data,
-        "featureImportance": feature_importance,
+        clusterDistribution=[ClusterItem(name=tag or "未分类", count=count) for tag, count in cluster_stats],
+        recommendationTrend=trend_data,
+        featureImportance=[FeatureItem(**item) for item in feature_importance],
         # 保留原有字段用于兼容
-        "total_users": total_users,
-        "total_activities": total_activities,
-        "active_activities": active_activities,
-        "total_rewards": total_rewards,
-        "total_recommendations": total_recommendations,
-        "click_rate": round(click_rate * 100, 2),
-        "accept_rate": round(accept_rate * 100, 2)
-    }
+        total_users=total_users,
+        total_activities=total_activities,
+        active_activities=active_activities,
+        total_rewards=total_rewards,
+        total_recommendations=total_recommendations,
+        click_rate=round(click_rate * 100, 2),
+        accept_rate=round(accept_rate * 100, 2)
+    )
 
 
 # ============ 用户潜力分析API ============
 
 @router.get("/potential-analysis/")
 @router.get("/potential-analysis")
-async def get_user_potential_analysis(
+def get_user_potential_analysis(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -164,17 +172,17 @@ async def get_user_potential_analysis(
     # 按概率排序，取前10
     top_users = sorted(top_users, key=lambda x: x['probability'], reverse=True)[:10]
     
-    return {
-        'highPotentialCount': high_potential,
-        'mediumPotentialCount': medium_potential,
-        'lowPotentialCount': low_potential,
-        'topUsers': top_users
-    }
+    return PotentialAnalysisResponse(
+        highPotentialCount=high_potential,
+        mediumPotentialCount=medium_potential,
+        lowPotentialCount=low_potential,
+        topUsers=top_users
+    )
 
 
 @router.get("/dimension-strategies/")
 @router.get("/dimension-strategies")
-async def get_dimension_strategies(
+def get_dimension_strategies(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -221,22 +229,22 @@ async def get_dimension_strategies(
         level = '高' if avg_score >= 0.5 else '低'
         level_key = 'high' if level == '高' else 'low'
         
-        strategies.append({
-            'dimension': dim_name,
-            'avgScore': avg_score,
-            'level': level,
-            'strategy': strategy_map[dim_name][level_key],
-            'userCount': high_count if level == '高' else (total_users - high_count)
-        })
+        strategies.append(StrategyItem(
+            dimension=dim_name,
+            avgScore=avg_score,
+            level=level,
+            strategy=strategy_map[dim_name][level_key],
+            userCount=high_count if level == '高' else (total_users - high_count)
+        ))
     
     # 按平均得分排序
-    strategies = sorted(strategies, key=lambda x: x['avgScore'], reverse=True)
+    strategies = sorted(strategies, key=lambda x: x.avgScore, reverse=True)
     
     return strategies
 
 
 @router.get("/users")
-async def get_users(
+def get_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     current_user: User = Depends(get_current_admin),
@@ -261,16 +269,16 @@ async def get_users(
             "created_at": user.created_at.isoformat() if user.created_at else None
         })
     
-    return {
-        "items": result,
-        "total": total,
-        "page": page,
-        "page_size": page_size
-    }
+    return AdminUserListResponse(
+        items=result,
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 
 @router.put("/users/{user_id}/status")
-async def update_user_status(
+def update_user_status(
     user_id: int,
     status: int,
     current_user: User = Depends(get_current_admin),
@@ -283,11 +291,12 @@ async def update_user_status(
     
     user.status = status
     db.commit()
+    logger.info(f"Admin {current_user.username} updated user {user_id} status to {status}")
     return {"message": "用户状态已更新"}
 
 
 @router.get("/users/stats")
-async def get_users_stats(
+def get_users_stats(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -301,19 +310,19 @@ async def get_users_stats(
         func.count(UserProfile.id)
     ).group_by(UserProfile.cluster_tag).all()
     
-    return {
-        "total": total,
-        "active": active,
-        "inactive": total - active,
-        "cluster_distribution": [
+    return UserStatsResponse(
+        total=total,
+        active=active,
+        inactive=total - active,
+        cluster_distribution=[
             {"cluster": tag or "未分类", "count": count}
             for tag, count in cluster_stats
         ]
-    }
+    )
 
 
 @router.get("/activities/stats")
-async def get_activities_stats(
+def get_activities_stats(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -333,25 +342,25 @@ async def get_activities_stats(
         func.count(Activity.id)
     ).group_by(Activity.incentive_type).all()
     
-    return {
-        "total": total,
-        "active": active,
-        "draft": db.query(Activity).filter(Activity.status == "draft").count(),
-        "ended": db.query(Activity).filter(Activity.status == "ended").count(),
-        "type_distribution": [
+    return ActivityStatsResponse(
+        total=total,
+        active=active,
+        draft=db.query(Activity).filter(Activity.status == "draft").count(),
+        ended=db.query(Activity).filter(Activity.status == "ended").count(),
+        type_distribution=[
             {"type": t or "未知", "count": c} for t, c in type_stats
         ],
-        "incentive_distribution": [
+        incentive_distribution=[
             {"type": t or "未知", "count": c} for t, c in incentive_stats
         ]
-    }
+    )
 
 
 # ============ 系统配置相关API ============
 
 @router.get("/config/")
 @router.get("/config")
-async def get_recommendation_config(
+def get_recommendation_config(
     current_user: User = Depends(get_current_admin)
 ):
     """获取推荐系统配置"""
@@ -361,24 +370,25 @@ async def get_recommendation_config(
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
-        return config.get('inference', {})
+        return ConfigResponse(**config.get('inference', {}))
     except Exception:
-        return {
-            "max_recommendations": 10,
-            "cold_start_count": 5,
-            "min_score": 0.3,
-            "diversity_weight": 0.2
-        }
+        return ConfigResponse(
+            max_recommendations=10,
+            cold_start_count=5,
+            min_score=0.3,
+            diversity_weight=0.2
+        )
 
 
 @router.put("/config/")
 @router.put("/config")
-async def update_recommendation_config(
+def update_recommendation_config(
     config: dict,
     current_user: User = Depends(get_current_admin)
 ):
     """更新推荐系统配置"""
     # 这里可以保存到配置文件或数据库
+    logger.info(f"Admin {current_user.username} updated recommendation config: {config}")
     return {"message": "配置已更新", "config": config}
 
 
@@ -386,7 +396,7 @@ async def update_recommendation_config(
 
 @router.get("/model/info/")
 @router.get("/model/info")
-async def get_model_info(
+def get_model_info(
     current_user: User = Depends(get_current_admin)
 ):
     """获取模型信息"""
@@ -405,20 +415,20 @@ async def get_model_info(
     
     feature_importance = model.get_feature_importance() if model else []
     
-    return {
-        "model_type": "RandomForest",
-        "trained_at": trained_at,
-        "accuracy": 0.85,  # 从训练日志获取
-        "auc": 0.89,
-        "train_samples": 1000,
-        "test_samples": 200,
-        "feature_importance": {f.get("feature", f"f{i}"): f.get("importance", 0) for i, f in enumerate(feature_importance[:6])}
-    }
+    return ModelInfoResponse(
+        model_type="RandomForest",
+        trained_at=trained_at,
+        accuracy=0.85,
+        auc=0.89,
+        train_samples=1000,
+        test_samples=200,
+        feature_importance={f.get("feature", f"f{i}"): f.get("importance", 0) for i, f in enumerate(feature_importance[:6])}
+    )
 
 
 @router.post("/model/train/")
 @router.post("/model/train")
-async def train_model(
+def train_model(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -433,39 +443,38 @@ async def train_model(
 
 @router.get("/clusters/")
 @router.get("/clusters")
-async def get_cluster_stats(
+def get_cluster_stats(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """获取聚类统计"""
     from app.services.clustering_service import ClusteringService
     stats = ClusteringService.get_cluster_stats(db)
-    return stats
+    return [ClusterStatsItem(**stat) for stat in stats]
 
 
 @router.post("/clusters/rebuild/")
 @router.post("/clusters/rebuild")
-async def rebuild_clusters(
+def rebuild_clusters(
     config: dict = None,
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """重新执行用户聚类"""
     from app.services.clustering_service import ClusteringService
-    from app.utils.logger import logger
     
     n_clusters = config.get("n_clusters", 10) if config else 10
     logger.info(f"管理员 {current_user.username} 启动重新聚类，聚类数: {n_clusters}")
     
     result = ClusteringService.cluster_users(db, n_clusters)
-    return result
+    return ClusterRebuildResponse(**result)
 
 
 # ============ 日志API ============
 
 @router.get("/logs/")
 @router.get("/logs")
-async def get_system_logs(
+def get_system_logs(
     level: str = None,
     start_date: str = None,
     end_date: str = None,
@@ -551,9 +560,9 @@ async def get_system_logs(
     start = (page - 1) * page_size
     end = start + page_size
     
-    return {
-        "items": logs[start:end],
-        "total": len(logs),
-        "page": page,
-        "page_size": page_size
-    }
+    return SystemLogResponse(
+        items=logs[start:end],
+        total=len(logs),
+        page=page,
+        page_size=page_size
+    )

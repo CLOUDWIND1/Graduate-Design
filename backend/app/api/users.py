@@ -1,29 +1,23 @@
 """用户API路由"""
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.api.deps import get_current_user
 from app.models import User, UserProfile
 from app.services.profile_service import profile_service
+from app.services.recommendation_service import recommendation_service
 from app.utils.logger import logger
-from app.schemas.profile import UserPreferences, UserProfileUpdate
+from app.schemas.profile import UserPreferences, UserProfileUpdate, UserProfileResponse
+from app.schemas.questionnaire import QuestionnaireSubmit
+from app.schemas.user import UserResponse
 
 router = APIRouter()
 
 
-# Removed UserProfileUpdate class definition here as it is imported from schemas
-
-
-class QuestionnaireSubmit(BaseModel):
-    """问卷提交数据"""
-    answers: List[int]  # 20个答案，每个1-5
-
-
 @router.post("/questionnaire/")
 @router.post("/questionnaire")
-async def submit_questionnaire(
+def submit_questionnaire(
     payload: QuestionnaireSubmit,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -41,22 +35,8 @@ async def submit_questionnaire(
     """
     answers = payload.answers
     
-    if len(answers) < 20:
-        # 补齐不足的答案
-        answers.extend([3] * (20 - len(answers)))
-    
-    # 计算各因子分数（平均值，归一化到0-1）
-    def avg_factor(start: int, end: int) -> float:
-        return sum(answers[start:end]) / ((end - start) * 5)
-    
-    questionnaire_data = {
-        'factor_social': avg_factor(0, 3),
-        'factor_psych': avg_factor(3, 7),
-        'factor_incent': avg_factor(7, 10),
-        'factor_tech': avg_factor(10, 13),
-        'factor_env': avg_factor(13, 16),
-        'factor_personal': avg_factor(16, 20)
-    }
+    # 使用服务层计算因子得分
+    questionnaire_data = recommendation_service.calculate_factor_scores(answers)
     
     logger.info(f"用户 {current_user.id} 提交问卷，计算因子: {questionnaire_data}")
     
@@ -65,12 +45,12 @@ async def submit_questionnaire(
     
     return {
         "message": "问卷提交成功",
-        "profile": profile.to_dict() if profile else None
+        "profile": profile
     }
 
 
-@router.get("/profile")
-async def get_user_profile(
+@router.get("/profile", response_model=UserProfileResponse)
+def get_user_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -81,11 +61,11 @@ async def get_user_profile(
         db.add(profile)
         db.commit()
         db.refresh(profile)
-    return profile.to_dict()
+    return profile
 
 
 @router.get("/me")
-async def get_current_user_info(
+def get_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -102,7 +82,7 @@ async def get_current_user_info(
         "status": current_user.status,
         "cluster_tag": profile.cluster_tag if profile else "新用户",
         "questionnaire_completed": profile.questionnaire_completed if profile else 0,
-        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "created_at": current_user.created_at,
         "preferences": {
             "frequency": profile.preference_frequency if profile and profile.preference_frequency else "daily",
             "activityTypes": profile.preference_activity_types.split(",") if profile and profile.preference_activity_types else [],
@@ -111,8 +91,8 @@ async def get_current_user_info(
     }
 
 
-@router.put("/profile")
-async def update_user_profile(
+@router.put("/profile", response_model=UserProfileResponse)
+def update_user_profile(
     payload: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -129,15 +109,11 @@ async def update_user_profile(
 
     db.commit()
     db.refresh(profile)
-    return profile.to_dict()
-
-    db.commit()
-    db.refresh(profile)
-    return profile.to_dict()
+    return profile
 
 
 @router.put("/me/preferences")
-async def update_user_preferences(
+def update_user_preferences(
     preferences: UserPreferences,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -159,21 +135,22 @@ async def update_user_preferences(
     return {"message": "偏好设置已更新"}
 
 @router.get("/")
-async def list_users(db: Session = Depends(get_db)):
+def list_users(db: Session = Depends(get_db)):
     """获取用户列表"""
     return {"message": "List users"}
 
 @router.get("/{user_id}")
-async def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user(user_id: int, db: Session = Depends(get_db)):
     """获取用户详情"""
     return {"message": f"Get user {user_id}"}
 
 @router.put("/{user_id}")
-async def update_user(user_id: int, db: Session = Depends(get_db)):
+def update_user(user_id: int, db: Session = Depends(get_db)):
     """更新用户信息"""
     return {"message": f"Update user {user_id}"}
 
 @router.delete("/{user_id}")
-async def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(user_id: int, db: Session = Depends(get_db)):
     """删除用户"""
     return {"message": f"Delete user {user_id}"}
+

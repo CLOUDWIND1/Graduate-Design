@@ -12,14 +12,16 @@ from datetime import datetime
 from app.database import get_db
 from app.api.deps import get_current_user
 from app.models import User, Reward, Activity
+from app.schemas.reward import RewardResponse, RewardListResponse, RewardSummaryResponse
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/rewards", tags=["rewards"])
 
 
-@router.get("/")
-@router.get("")
-async def get_rewards(
+
+@router.get("/", response_model=RewardListResponse)
+@router.get("", response_model=RewardListResponse)
+def get_rewards(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     reward_type: Optional[str] = None,
@@ -41,30 +43,27 @@ async def get_rewards(
         .limit(page_size)\
         .all()
     
-    # 获取活动名称
-    result = []
+    # 手动填充 activity_name 字段，因为 Pydantic ORM mode 默认不会从 relationship 自动获取非直接关联字段
+    # 或者可以在 Model 中定义一个 @property，但这里我们在 API 层处理
+    # 手动填充 activity_name 字段
+    # 注意：更优雅的方式是在 Schema 中配置 ORM 关联，或者在 Service 层处理
+    # 这里为了保持 API 层逻辑简单，我们在转换前处理
     for reward in rewards:
-        activity = db.query(Activity).filter(Activity.id == reward.activity_id).first()
-        result.append({
-            "id": reward.id,
-            "reward_type": reward.reward_type,
-            "amount": float(reward.amount) if reward.amount else 0,
-            "status": reward.status,
-            "activity_name": activity.title if activity else "未知活动",
-            "created_at": reward.created_at.isoformat() if reward.created_at else None
-        })
+        if not reward.activity_name: # 如果模型本身没有这个属性（非ORM映射字段）
+             activity = db.query(Activity).filter(Activity.id == reward.activity_id).first()
+             reward.activity_name = activity.title if activity else "未知活动"
     
-    return {
-        "items": result,
-        "total": total,
-        "page": page,
-        "page_size": page_size
-    }
+    return RewardListResponse(
+        items=rewards, # Pydantic v2 mode='from_attributes' handle ORM objects
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 
-@router.get("/summary/")
-@router.get("/summary")
-async def get_rewards_summary(
+@router.get("/summary/", response_model=RewardSummaryResponse)
+@router.get("/summary", response_model=RewardSummaryResponse)
+def get_rewards_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -89,16 +88,16 @@ async def get_rewards_summary(
         Reward.status == "pending"
     ).count()
     
-    return {
-        "totalAmount": float(total_amount),
-        "totalPoints": int(total_points),
-        "pendingCount": pending_count
-    }
+    return RewardSummaryResponse(
+        totalAmount=float(total_amount),
+        totalPoints=int(total_points),
+        pendingCount=pending_count
+    )
 
 
 @router.post("/{reward_id}/claim/")
 @router.post("/{reward_id}/claim")
-async def claim_reward(
+def claim_reward(
     reward_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -121,3 +120,4 @@ async def claim_reward(
     logger.info(f"用户 {current_user.id} 领取奖励 {reward_id}")
     
     return {"message": "领取成功"}
+
